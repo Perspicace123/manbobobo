@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<!-- 添加 viewport 以确保在手机上正常显示 -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>曼波猛攻鼠鼠跑酷</title>
+<style>
+    body {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        margin: 0;
+        background-color: #f0f0f0;
+        font-family: sans-serif;
+        text-align: center;
+        /* 防止手机长按时弹出菜单 */
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        user-select: none;
+    }
+    #game-wrapper {
+        border: 1px solid #000;
+        position: relative;
+        /* 强制画布大小，防止在手机上变形 */
+        width: 800px;
+        height: 200px;
+    }
+    canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+    }
+    #score {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        font-size: 20px;
+        color: black;
+    }
+    #game-over {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        display: none;
+        flex-direction: column;
+        align-items: center;
+    }
+    #game-over h2 { margin: 0; }
+
+    /* 【新功能】跳跃按钮的样式 */
+    #jump-button {
+        position: absolute;
+        bottom: 20px;
+        right: 20px;
+        width: 65px;
+        height: 65px;
+        border-radius: 50%;
+        background-color: rgba(0, 123, 255, 0.7);
+        color: white;
+        font-size: 18px;
+        font-weight: bold;
+        border: 2px solid white;
+        cursor: pointer;
+        /* 移除移动设备上的点击高亮效果 */
+        -webkit-tap-highlight-color: transparent;
+        z-index: 10; /* 确保按钮在画布之上 */
+    }
+    #jump-button:active {
+        background-color: rgba(0, 86, 179, 0.9);
+    }
+</style>
+</head>
+<body>
+
+<div>
+    <div id="game-wrapper">
+        <canvas id="gameCanvas" width="800" height="200"></canvas>
+        <div id="score">分数: 0</div>
+        <div id="game-over">
+            <h2>游戏结束</h2>
+            <button onclick="restartGame()">重新开始</button>
+        </div>
+        <!-- 【新功能】添加跳跃按钮 -->
+        <button id="jump-button">⬆️</button>
+    </div>
+    <p>按“空格”、“↑”或屏幕按钮开始游戏</p>
+</div>
+
+<audio id="bgm" src="audio/background_music.mp3" loop></audio>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const scoreElement = document.getElementById('score');
+    const gameOverElement = document.getElementById('game-over');
+    const bgm = document.getElementById('bgm');
+    const jumpButton = document.getElementById('jump-button'); // 获取按钮
+
+    const playerImage = new Image();
+    playerImage.src = 'images/player.png';
+
+    const player = { x: 50, y: 140, width: 40, height: 60, velocityY: 0 };
+
+    let obstacles = [];
+    let frameCount = 0;
+    let obstacleFrequency = 150;
+    let gameSpeed = 4;
+    let score = 0;
+
+    let gameOver = false;
+    let gameStarted = false;
+    let imageLoaded = false;
+
+    // 【新功能】将跳跃/开始逻辑封装成一个函数
+    function handleAction() {
+        if (!gameStarted && imageLoaded) {
+            // 如果游戏还没开始，就启动游戏
+            gameStarted = true;
+            // 播放音乐需要用户交互，放在这里最合适
+            bgm.play().catch(e => console.error("音乐播放失败:", e));
+            gameLoop(); // 真正启动游戏循环
+        } else if (!gameOver) {
+            // 如果游戏在进行中，就执行跳跃
+            if (player.y === canvas.height - player.height) {
+                player.velocityY = -12;
+            }
+        }
+    }
+
+    function gameLoop() {
+        if (!gameStarted || gameOver) {
+            // 如果游戏结束或未开始，就停止循环
+            return;
+        }
+
+        updateGameState();
+        drawGame();
+
+        requestAnimationFrame(gameLoop);
+    }
+
+    function updateGameState() {
+        player.velocityY += 0.4;
+        player.y += player.velocityY;
+
+        if (player.y > canvas.height - player.height) {
+            player.y = canvas.height - player.height;
+            player.velocityY = 0;
+        }
+
+        frameCount++;
+        if (frameCount % obstacleFrequency === 0) {
+            const obstacleHeight = Math.random() * 40 + 20;
+            obstacles.push({ x: canvas.width, y: canvas.height - obstacleHeight, width: 20, height: obstacleHeight });
+            if (obstacleFrequency > 60) obstacleFrequency -= 1;
+            if (gameSpeed < 10) gameSpeed += 0.05;
+        }
+        obstacles.forEach(o => { o.x -= gameSpeed; });
+        obstacles = obstacles.filter(o => o.x + o.width > 0);
+
+        obstacles.forEach(obstacle => {
+            if (player.x < obstacle.x + obstacle.width && player.x + player.width > obstacle.x &&
+                player.y < obstacle.y + obstacle.height && player.y + player.height > obstacle.y) {
+                endGame();
+            }
+        });
+
+        score++;
+    }
+
+    function drawGame() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        if(imageLoaded) ctx.drawImage(playerImage, player.x, player.y, player.width, player.height);
+        ctx.fillStyle = 'blue';
+        obstacles.forEach(o => { ctx.fillRect(o.x, o.y, o.width, o.height); });
+        scoreElement.textContent = `分数: ${Math.floor(score / 10)}`;
+    }
+
+    function drawInitialScreen() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        if (imageLoaded) {
+            ctx.drawImage(playerImage, player.x, player.y, player.width, player.height);
+            ctx.font = "20px Arial";
+            ctx.fillStyle = "black";
+            ctx.textAlign = "center";
+            ctx.fillText("准备好了吗？", canvas.width / 2, canvas.height / 2);
+        } else {
+            ctx.font = "20px Arial";
+            ctx.fillText("资源加载中...", canvas.width / 2, canvas.height / 2);
+        }
+    }
+
+    function endGame() {
+        gameOver = true;
+        bgm.pause();
+        gameOverElement.style.display = 'flex';
+    }
+
+    function restartGame() {
+        Object.assign(player, { y: 140, velocityY: 0 });
+        obstacles = [];
+        frameCount = 0;
+        obstacleFrequency = 150;
+        gameSpeed = 4;
+        score = 0;
+        gameOver = false;
+        gameStarted = true;
+        gameOverElement.style.display = 'none';
+
+        bgm.currentTime = 0;
+        bgm.play();
+        gameLoop();
+    }
+
+    // --- 统一的输入监听 ---
+    document.addEventListener('keydown', (e) => {
+        if (e.code === 'Space' || e.code === 'ArrowUp') {
+            handleAction();
+        }
+    });
+
+    // 【新功能】为按钮添加事件监听
+    // 使用 'touchstart' 保证手机上最快响应
+    jumpButton.addEventListener('touchstart', (e) => {
+        e.preventDefault(); // 防止触发点击、缩放等默认行为
+        handleAction();
+    });
+    // 也添加 'click' 作为PC和备用选项
+    jumpButton.addEventListener('click', handleAction);
+
+    // --- 确保图片加载完再显示初始画面 ---
+    playerImage.onload = () => {
+        imageLoaded = true;
+        drawInitialScreen(); // 图片加载完，画出初始等待画面
+    };
+
+    playerImage.onerror = () => {
+        console.error("图片加载失败！请检查 'images/player.png' 路径。");
+        alert("图片加载失败！请确认文件路径正确，并且您是通过本地服务器访问的。");
+    }
+</script>
+
+</body>
+</html>
